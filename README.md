@@ -3,7 +3,7 @@ The data and code for the research article "Perceived feasibility of a net-zero 
 
 Data availability
 The anonymized data in the research article can be found in this repository. This will enable the reproduction of key figures. 
-Anonymized data is available for the editors and reviewers upon request. 
+Anonymized data is available upon reasonable request. 
 
 Code availability
 The code for analysis and visualization in the research article can be found in this repository.
