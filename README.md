@@ -1,5 +1,6 @@
 # source_data_deposit_feasibility
 The data and code for the research article "Perceived feasibility of a net-zero system transition and its potential barriers among Japanese experts". 
+The research is conducted by Yiyi Ju, Masahiro Sugiyama, and Hiroto Shiraki. 
 
 Data availability
 The anonymized data in the research article can be found in this repository. This will enable the reproduction of key figures. 
