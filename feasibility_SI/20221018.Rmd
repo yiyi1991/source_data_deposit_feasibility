@@ -1,0 +1,566 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+rm(list=ls(all=TRUE))
+print(Sys.time())
+
+library(ggplot2)
+library(ggrepel)
+library(tidyr)
+library(dplyr)
+library(viridis)
+library(openxlsx)
+library(car)
+library(ggsci)
+library(scales)
+library(ggcorrplot)
+
+
+```
+#load
+
+```{r}
+all_data <- read.xlsx("all_data_SI.xlsx",1)
+```
+
+#F_desirablility
+
+```{r}
+all_data$desirability[all_data$desirability == "desirability50"] <- 50
+all_data$desirability[all_data$desirability == "desirability60"] <- 60
+all_data$desirability[all_data$desirability == "desirability70"] <- 70
+all_data$desirability[all_data$desirability == "desirability80"] <- 80
+all_data$desirability[all_data$desirability == "desirability90"] <- 90
+all_data$desirability[all_data$desirability == "desirability100"] <- 100
+all_data$desirability[all_data$desirability == "desirability100+"] <- "100+"
+
+desirability_order <- c(50,60,70,80,90,100,"100+")
+all_data$desirability  <- factor(all_data$desirability, levels = desirability_order)
+
+t <- all_data[c(1:2,86,87)] 
+t %>% filter(IAM == 1) %>% count(desirability) -> t
+t$n_group <- sum(t$n)
+t$group <- "IAM"
+t -> d
+
+t <- all_data[c(1:2,86,87)] 
+t %>% filter(IPCC == 1) %>% count(desirability) -> t
+t$n_group <- sum(t$n)
+t$group <- "IPCC"
+rbind(t,d) -> d
+
+t <- all_data[c(1:2,86,87)] 
+t %>% filter(IAM == 1 | IPCC == 1) %>% count(desirability) -> t
+t$n_group <- sum(t$n)
+t$group <- "IPCC/IAM"
+rbind(t,d) -> d
+
+t <- all_data[c(1:2,86,87)] 
+t %>% filter(IAM == 0 & IPCC == 0) %>% count(desirability) -> t
+t$n_group <- sum(t$n)
+t$group <- "Others"
+rbind(t,d) -> d
+
+t <- all_data[c(1:2,86,87)] 
+t %>% count(desirability) -> t
+t$n_group <- sum(t$n)
+t$group <- "All"
+rbind(t,d) -> d
+
+d$share = d$n / d$n_group * 100
+```
+
+
+```{r}
+d %>% filter(group %in% c("IPCC/IAM", "Others", "All")) -> d
+
+d$group[d$group == "IPCC/IAM"] <- "IPCC/IAM(28/107)"
+d$group[d$group == "Others"] <- "Others(79/107)"
+d$group[d$group == "All"] <- "All(107/107)"
+
+d %>%
+  ggplot() +
+  theme_bw() +
+  labs(title = "Desirablity",
+  subtitle = "What is the most desirable level of \nemissions reduction goal by 2050 in Japan?",
+  x = "Emissions reduction goal (x% reduction)", y = "Share (%)") +
+  geom_bar(aes(x = desirability, y = share, fill = desirability), stat = "identity") +
+  scale_fill_brewer(palette="RdYlGn") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5)) +
+  #coord_flip()+
+  #ylim(c(0, 1)) +
+  theme(legend.position = "none") +
+  facet_wrap(~group, nrow=3) -> p
+
+print(p)
+
+#ggsave("result_desirability.png",width=3.5,height=5,dpi=330 )
+ggsave("result_desirability.pdf",width=3.5,height=5,device="pdf")
+
+```
+
+#F_feasibility
+
+```{r}
+all_data <- read.xlsx("all_data_SI.xlsx",1)
+
+t <- all_data[c(1,4,6,8,10,86,87)] 
+t <- gather(t, key="feasibility", value="probability", -c("no","IAM","IPCC"))
+t -> d1
+
+probability_order <- c(">= 90%",">= 66%","33-66%","<=33%","<=10%")
+rev(probability_order) -> probability_order
+d1$probability <- factor(d1$probability, levels = probability_order)
+
+feasibility_order <- c("feasibility80","feasibility90","feasibility100","feasibility110")
+d1$feasibility <- factor(d1$feasibility, levels = feasibility_order)
+
+
+
+d1 -> t
+t %>% filter(IAM == 1) -> t
+t %>% group_by(feasibility,probability) %>% tally() -> t
+t %>% group_by(feasibility) %>% summarise(sum_n = sum(n)) %>% ungroup() -> t1
+right_join(t,t1,by = "feasibility") -> t
+t$share = t$n / t$sum_n * 100
+t$group <- "IAM"
+t -> d
+
+d1 -> t
+t %>% filter(IPCC == 1) -> t
+t %>% group_by(feasibility,probability) %>% tally() -> t
+t %>% group_by(feasibility) %>% summarise(sum_n = sum(n)) %>% ungroup() -> t1
+right_join(t,t1,by = "feasibility") -> t
+t$share = t$n / t$sum_n * 100
+t$group <- "IPCC"
+rbind(t,d) -> d
+
+d1 -> t
+t %>% filter(IAM == 1 | IPCC == 1) -> t
+t %>% group_by(feasibility,probability) %>% tally() -> t
+t %>% group_by(feasibility) %>% summarise(sum_n = sum(n)) %>% ungroup() -> t1
+right_join(t,t1,by = "feasibility") -> t
+t$share = t$n / t$sum_n * 100
+t$group <- "IPCC/IAM"
+rbind(t,d) -> d
+
+d1 -> t
+t %>% filter(IAM != 1 & IPCC != 1) -> t
+t %>% group_by(feasibility,probability) %>% tally() -> t
+t %>% group_by(feasibility) %>% summarise(sum_n = sum(n)) %>% ungroup() -> t1
+right_join(t,t1,by = "feasibility") -> t
+t$share = t$n / t$sum_n * 100
+t$group <- "Others"
+rbind(t,d) -> d
+
+
+d1 -> t
+t %>% group_by(feasibility,probability) %>% tally() -> t
+t %>% group_by(feasibility) %>% summarise(sum_n = sum(n)) %>% ungroup() -> t1
+right_join(t,t1,by = "feasibility") -> t
+t$share = t$n / t$sum_n * 100
+t$group <- "All"
+rbind(t,d) -> d
+```
+
+
+```{r}
+d %>% filter(group %in% c("IPCC/IAM", "Others", "All")) -> d
+
+d$group[d$group == "IPCC/IAM"] <- "IPCC/IAM(29/108)"
+d$group[d$group == "Others"] <- "Others(79/108)"
+d$group[d$group == "All"] <- "All(108/108)"
+
+d %>%
+  ggplot() +
+  theme_bw() +
+  labs(title = "Feasibility",
+  subtitle = "To what extent do you think Japan's 2050 GHG reduction goal will be feasible?",
+  x = "", y = "Share (%)") +
+  geom_bar(aes(x = probability, y = share, fill = probability), stat = "identity") +
+  scale_fill_brewer(palette="RdYlGn") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  #facet_grid(feasibility~group) -> p
+  facet_grid(group~feasibility) -> p
+
+print(p)
+
+#ggsave("result_feasibility.png",width=7,height=5.5,dpi=330)
+ggsave("result_feasibility.pdf",width=7,height=5.5,device = "pdf")
+```
+#F_feasibility_statistical_result
+
+```{r}
+
+all_data -> t
+
+t$modeler = t$IAM + t$IPCC
+t$modeler[which(t$IAMorIPCC!=0)] <- 1
+
+modeler_order <- c(0,1)
+t$modeler <- factor(t$modeler, levels = modeler_order)
+t -> d
+
+feas_order <- c("<=10%","<=33%","33-66%",">= 66%",">= 90%")
+d$feasibility110 <- factor(d$feasibility110 , levels = feas_order)
+d$feasibility100 <- factor(d$feasibility100 , levels = feas_order)
+d$feasibility90 <- factor(d$feasibility90 , levels = feas_order)
+d$feasibility80 <- factor(d$feasibility80 , levels = feas_order)
+
+
+library(VGAM)
+library(lmtest)
+library(MASS)
+# parallel test
+
+# <- vglm(ordered(d$feasibility80) ~ d$modeler + d$r2, data = d, family=cumulative(parallel = T))
+#ps2 <- vglm(ordered(d$feasibility80) ~ d$modeler + d$r2, data = d, family=cumulative(parallel = F))
+#lrtest_vglm(ps1,ps2)
+
+
+# ordinal logistic
+m_f80_modeler <- polr(d$feasibility80 ~ d$modeler, data = d)
+summary(m_f80_modeler)
+
+confint(m_f80_modeler)
+
+
+#Mann-Whitney U test
+d$feasibility80_num <- as.numeric(d$feasibility80_num)
+wilcox.test(d$feasibility80_num ~ d$modeler, data = d)
+
+
+
+```
+
+#F_feasi_by_desir
+
+```{r}
+t <- all_data[c(1,2,4,6,8,10,86,87)] 
+t %>% filter(desirability == "desirability100") -> t1
+t1$desirability_group <- "desirability100(62/107)"
+t1 -> d
+t %>% filter(desirability == "desirability100+") -> t1
+t1$desirability_group <- "desirability100+(16/107)"
+rbind(d,t1) -> d
+t %>% filter(desirability != "desirability100" & desirability != "100+") -> t1
+t1$desirability_group <- "desirability100-(29/107)"
+rbind(d,t1) -> d
+
+desirability_group_order <- c("desirability100-(29/107)","desirability100(62/107)","desirability100+(16/107)")
+d$desirability_group  <- factor(d$desirability_group, levels = desirability_group_order)
+
+d <- gather(d, key="feasibility", value="probability", -c("no","IAM","IPCC","desirability","desirability_group"))
+d -> d1
+
+
+d1 -> t
+t %>% filter(desirability_group == "desirability100-(29/107)") -> t
+t %>% group_by(feasibility,probability) %>% tally() -> t
+t %>% group_by(feasibility) %>% summarise(sum_n = sum(n)) %>% ungroup() -> t1
+right_join(t,t1,by = "feasibility") -> t
+t$share = t$n / t$sum_n * 100
+t$group <- "desirability100-(29/107)"
+t -> d
+
+d1 -> t
+t %>% filter(desirability_group == "desirability100(62/107)") -> t
+t %>% group_by(feasibility,probability) %>% tally() -> t
+t %>% group_by(feasibility) %>% summarise(sum_n = sum(n)) %>% ungroup() -> t1
+right_join(t,t1,by = "feasibility") -> t
+t$share = t$n / t$sum_n * 100
+t$group <- "desirability100(62/107)"
+rbind(t,d) -> d
+
+d1 -> t
+t %>% filter(desirability_group == "desirability100+(16/107)") -> t
+t %>% group_by(feasibility,probability) %>% tally() -> t
+t %>% group_by(feasibility) %>% summarise(sum_n = sum(n)) %>% ungroup() -> t1
+right_join(t,t1,by = "feasibility") -> t
+t$share = t$n / t$sum_n * 100
+t$group <- "desirability100+(16/107)"
+rbind(t,d) -> d
+```
+
+
+```{r}
+d -> d1
+
+probability_order <- c(">= 90%",">= 66%","33-66%","<=33%","<=10%")
+rev(probability_order) -> probability_order
+d1$probability <- factor(d1$probability, levels = probability_order)
+
+feasibility_order <- c("feasibility80","feasibility90","feasibility100","feasibility110")
+d1$feasibility <- factor(d1$feasibility, levels = feasibility_order)
+
+d1 -> d
+
+d %>%
+  ggplot() +
+  theme_bw() +
+  labs(title = "Feasibility",
+  subtitle = "To what extent do you think Japan's 2050 GHG reduction goal will be feasible?",
+  x = "", y = "Share (%)") +
+  geom_bar(aes(x = probability, y = share, fill = probability), stat = "identity") +
+  scale_fill_brewer(palette="RdYlGn") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_grid(group~feasibility) -> p
+
+print(p)
+
+#ggsave("result_feasibility_by_des.png",width=7,height=6.5,dpi=330)
+ggsave("result_feasibility_by_des.pdf",width=7,height=6.5,device = "pdf")
+```
+
+#F_barrier
+
+```{r}
+barrier_order <- c("b1","b2","b3","b4","b5","b6","b7","b8","b9","b10","b11","b12","b13","b14","b15","b16","b17","b18","b19","b20","b21","b22")
+
+barrier_short <- c(
+  "national_strategy",
+  "scientific_involvement",
+  "local_capacities", 
+  "energy_supply_tech",
+  "cdr_tech",
+  "enduse_tech", 
+  "hard-to-abate_sectors",
+  "re_concerns",
+  "ccs_concerns",
+  "nuclear_concerns",
+  "infra_investment",
+  "power_imbalance", 
+  "industry_awareness",
+  "digitalization",
+  "mass_media",
+  "social_movement", 
+  "c_tax_resistance", 
+  "labor_supply", 
+  "enduse_regulation", 
+  "green_recovery", 
+  "external_pressure", 
+  "intl_credits")
+
+#probability
+t <- all_data[c(1,12:33)]
+t <- t %>% gather(key = barrier, value = value, -no)
+t$variable <- substr(t$barrier, 1, regexpr("\\|",t$barrier)-1)
+t$barrier  <- substr(t$barrier, regexpr("\\|",t$barrier)+1,nchar(t$barrier))
+t$value    <- as.factor(t$value)
+
+for (i in 1:nlevels(as.factor(t$barrier))){
+  t[t$barrier %in% barrier_order[i],"barrier_short"] <- barrier_short[i]
+}
+t$barrier <- t$barrier_short
+t <- t[colnames(t) != c("barrier_short")]
+t$barrier  <- factor(t$barrier, levels = barrier_short)
+
+
+t$value <- lapply(t$value, gsub, pattern="5", replacement = "a")
+t$value <- lapply(t$value, gsub, pattern="1", replacement = "0.05")
+t$value <- lapply(t$value, gsub, pattern="2", replacement = "0.215")
+t$value <- lapply(t$value, gsub, pattern="3", replacement = "0.50")
+t$value <- lapply(t$value, gsub, pattern="4", replacement = "0.78")
+t$value <- lapply(t$value, gsub, pattern="a", replacement = "0.95")
+t$value <- as.numeric(t$value)
+colnames(t)[3] <- c("probability")
+t <- t[-4]
+barrier <- t
+
+#impact
+t <- all_data[c(1,34:55)]
+t <- t %>% gather(key = barrier, value = value, -no)
+t$variable <- substr(t$barrier, 1, regexpr("\\|",t$barrier)-1)
+t$barrier  <- substr(t$barrier, regexpr("\\|",t$barrier)+1,nchar(t$barrier))
+t$value    <- as.factor(t$value)
+
+for (i in 1:nlevels(as.factor(t$barrier))){
+  t[t$barrier %in% barrier_order[i],"barrier_short"] <- barrier_short[i]
+}
+t$barrier <- t$barrier_short
+t <- t[colnames(t) != c("barrier_short")]
+t$barrier  <- factor(t$barrier, levels = barrier_short)
+
+t$value <- as.numeric(t$value)
+colnames(t)[3] <- c("impact")
+t    <- t[-4]
+barrier <- merge(barrier, t, all = T)
+
+barrier -> barrier_all
+```
+
+
+```{r}
+t <- NULL
+t$mean_probability <- tapply(barrier$probability, barrier$barrier, mean)
+t$mean_impact      <- tapply(barrier$impact,      barrier$barrier, mean)
+t$sd_probability   <- tapply(barrier$probability, barrier$barrier, sd)
+t$sd_impact        <- tapply(barrier$impact,      barrier$barrier, sd)
+t         <- data.frame(t)
+t$barrier <- rownames(t)
+
+type <- data.frame(barrier = t$barrier, 
+                   barrier_actor = c(
+                            "(G) national_strategy",
+                            "(G) scientific_involvement",
+                            "(G) local_capacities",
+                            "(B) energy_supply_tech",
+                            "(B) cdr_tech",
+                            "(B) enduse_tech",
+                            "(B) hard-to-abate_sectors",
+                            "(C) re_concerns",
+                            "(C) ccs_concerns",
+                            "(C) nuclear_concerns",
+                            "(B) infra_investment",
+                            "(B) power_imbalance",
+                            "(B) industry_awareness",
+                            "(B) digitalization",
+                            "(C) mass_media",
+                            "(C) social_movement",
+                            "(B) c_tax_resistance",
+                            "(B) labor_supply",
+                            "(G) enduse_regulation",
+                            "(B) green_recovery",
+                            "(G) external_pressure",
+                            "(G) intl_credits"),
+                   type = c("institutional", 
+                            "institutional",
+                            "institutional",
+                            "techno_economic",
+                            "techno_economic",
+                            "techno_economic",
+                            "techno_economic",
+                            "socio_cultural",
+                            "socio_cultural",
+                            "socio_cultural",
+                            "techno_economic",
+                            "institutional",
+                            "socio_cultural",
+                            "techno_economic",
+                            "socio_cultural",
+                            "socio_cultural",
+                            "socio_cultural",
+                            "techno_economic",
+                            "institutional",
+                            "techno_economic",
+                            "socio_cultural",
+                            "institutional"))
+
+#type
+
+right_join(t,type,by="barrier") -> t
+
+t %>% 
+  ggplot(aes(x = mean_probability, y = mean_impact, label = barrier_actor,color=type)) + 
+  geom_point() + geom_text_repel() +
+  geom_vline(xintercept = 0.5, linetype = 2, color = "dark grey") +
+  geom_hline(yintercept = 3, linetype = 2, color = "dark grey") +
+  xlim(c(0,1)) + ylim(c(1,5)) +
+  labs(title = "Probability and impact of all barriers",
+       subtitle = "Probability: the probability of each factor acting/becoming as a barrier\nImpact: the degree to which each factor hinders the feasibility of achieving carbon neutrality\nActor: Government(G), Business(B),Citizen(C)") +
+  theme_bw() -> p
+
+print(p)
+
+#ggsave(filename = paste("result","_barrier",".jpg",sep=""),width=9,height=7,dpi=330 )
+ggsave(filename = paste("result","_barrier",".pdf",sep=""),width=9,height=7,device = "pdf" )
+```
+
+#F_risk
+
+```{r}
+all_data[c(1,64:85)] -> t
+
+
+t <- t %>% gather(key = barrier, value = value, -no)
+t$variable <- substr(t$barrier, 1, regexpr("\\|",t$barrier)-1)
+t$barrier  <- substr(t$barrier, regexpr("\\|",t$barrier)+1,nchar(t$barrier))
+t$value    <- as.numeric(t$value)
+
+for (i in 1:nlevels(as.factor(t$barrier))){
+  t[t$barrier %in% barrier_order[i],"barrier_short"] <- barrier_short[i]
+}
+t$barrier <- t$barrier_short
+t <- t[colnames(t) != c("barrier_short")]
+t$barrier  <- factor(t$barrier, levels = barrier_short)
+
+type <- data.frame(barrier = barrier_short, 
+                   type = c("harder to model",
+                            "harder to model",
+                            "harder to model",
+                            "easier to model",
+                            "easier to model",
+                            "easier to model",
+                            "easier to model",
+                            "harder to model",
+                            "harder to model",
+                            "harder to model",
+                            "easier to model",
+                            "harder to model",
+                            "harder to model",
+                            "harder to model",
+                            "harder to model",
+                            "harder to model",
+                            "harder to model",
+                            "easier to model",
+                            "easier to model",
+                            "easier to model",
+                            "harder to model",
+                            "easier to model"
+                            ))
+
+type
+
+right_join(t,type,by="barrier") -> t
+
+```
+
+
+```{r}
+p <- 
+  ggplot(data = t, aes(x = reorder(x = barrier, X = value, FUN = median), 
+                       y = value, fill = type)) + 
+  geom_boxplot(outlier.colour = NA, color = "dark grey") + 
+  geom_jitter(size=0.3) + 
+  scale_fill_brewer(palette="BuPu",direction = -1) +
+  scale_y_log10() + 
+  theme_bw() +
+  coord_flip() +
+  labs(title = "Risk of all barriers", subtitle = "median order", x = "", y = "risk (log10)") 
+
+print(p)
+
+#ggsave(filename = paste("result","_risk",".jpg",sep=""),width=8,height=5,dpi=330 )
+ggsave(filename = paste("result","_risk",".pdf",sep=""),width=8,height=5,device = "pdf" )
+```
+
+
+```{r}
+t <- all_data
+
+t <- subset(t, !is.na(t$desirability))
+#t <- na.omit(t)
+
+
+code_desirability   <- c(3)
+code_feasibility    <- c(5,7,9,11)
+
+corr <- round(cor(t[c(code_desirability, code_feasibility)],method = c("spearman")), 2)
+p.mat <- cor_pmat(t[c(code_desirability, code_feasibility)])
+ggcorrplot(corr,
+           type = "lower",
+           lab = TRUE,
+           p.mat = p.mat)
+
+
+
+
+```
+
+
+
